@@ -60,6 +60,10 @@ externals:
     subdirectory: AceGUI-3.0
     tag: latest
 
+  Libs/LibSharedMedia-3.0:
+    url: https://repos.wowace.com/wow/libs/libsharedmedia-3.0/trunk
+    tag: latest
+
 # Files/folders to exclude from the release zip
 ignore:
   - .github

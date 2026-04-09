@@ -8,9 +8,9 @@ ns.PartySync = PartySync
 -- ============================================================
 --  Comm prefixes
 -- ============================================================
-local PREFIX_MARKER     = "TKT_MRK"  -- player changed their marker
-local PREFIX_ASSIGNMENT = "TKT_ASN"  -- player's current focus assignment
-local PREFIX_HELLO      = "TKT_HI"   -- presence ping on zone-in
+local PREFIX_MARKER     = "MKT_MRK"  -- player changed their marker
+local PREFIX_ASSIGNMENT = "MKT_ASN"  -- player's current focus assignment
+local PREFIX_HELLO      = "MKT_HI"   -- presence ping on zone-in
 
 -- ============================================================
 --  Mock party data (dev test mode)
@@ -50,6 +50,10 @@ end
 --  Helper: pick correct comm channel
 -- ============================================================
 local function CommChannel()
+    local inInstance, instanceType = IsInInstance()
+    if inInstance and (instanceType == "party" or instanceType == "raid") then
+        return "INSTANCE_CHAT"
+    end
     if IsInRaid()  then return "RAID"  end
     if IsInGroup() then return "PARTY" end
     return nil
@@ -59,12 +63,14 @@ end
 --  Broadcasts
 -- ============================================================
 function PartySync:BroadcastMarker()
+    if ns.db.testMode then return end
     local ch = CommChannel()
     if not ch then return end
     ns.TKT:SendCommMessage(PREFIX_MARKER, ns.TKT:Serialize(ns.db.myMarker), ch)
 end
 
 function PartySync:BroadcastAssignment()
+    if ns.db.testMode then return end
     local ch = CommChannel()
     if not ch then return end
     local me      = UnitName("player")
@@ -73,6 +79,7 @@ function PartySync:BroadcastAssignment()
 end
 
 function PartySync:BroadcastHello()
+    if ns.db.testMode then return end
     local ch = CommChannel()
     if not ch then return end
     ns.TKT:SendCommMessage(PREFIX_HELLO, ns.TKT:Serialize(ns.db.myMarker), ch)
@@ -99,28 +106,6 @@ function PartySync:OnCommReceived(prefix, message, distribution, sender)
         ns.partyData[sender].mobName = (data ~= "" and data) or nil
         ns.Panel:Refresh()
     end
-end
-
--- ============================================================
---  Announce to party chat
--- ============================================================
-function PartySync:AnnounceMarker()
-    local markerIdx = ns.db.myMarker
-    if markerIdx == 0 then
-        ns.Print("You haven't chosen a kick marker yet. Pick one in the panel or /kt config.")
-        return
-    end
-    local ch = CommChannel()
-    if not ch then
-        ns.Print("You're not in a group — no one to announce to.")
-        return
-    end
-    local msg = string.format(
-        "[TulloKickTracker] My kick marker is %s %s — watch for my interrupts!",
-        ns.MarkerChatIcon(markerIdx),
-        ns.MarkerName(markerIdx)
-    )
-    SendChatMessage(msg, ch)
 end
 
 -- ============================================================

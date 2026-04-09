@@ -19,7 +19,7 @@ end
 -- ============================================================
 local function BuildOptions()
     return {
-        name    = "TulloKickTracker",
+        name    = "Mythic Kick Tracker",
         handler = ns.TKT,
         type    = "group",
         args    = {
@@ -51,15 +51,6 @@ local function BuildOptions()
                 get    = function() return ns.db.dungeonScope end,
                 set    = function(_, val) ns.db.dungeonScope = val end,
             },
-            autoAnnounce = {
-                type  = "toggle",
-                name  = "Auto-Announce Marker on Select",
-                desc  = "Automatically send your marker choice to party chat when you pick or change it (only while in a dungeon).",
-                order = 4,
-                width = "full",
-                get   = function() return ns.db.autoAnnounce end,
-                set   = function(_, val) ns.db.autoAnnounce = val end,
-            },
             showPanelInCombat = {
                 type  = "toggle",
                 name  = "Keep Panel Visible During Combat",
@@ -80,19 +71,39 @@ local function BuildOptions()
                 desc   = "Sound to play when your focus target begins an interruptible cast.",
                 order  = 11,
                 values = {
-                    tts     = "Text-to-Speech: \"Kick\"",
-                    bundled = "Bundled Sound File",
-                    wowui   = "WoW UI Sound (Raid Warning)",
-                    custom  = "Custom Sound Path",
+                    tts    = "Text-to-Speech",
+                    lsm    = "Sound Library (LibSharedMedia)",
+                    wowui  = "WoW UI Sound (Raid Warning)",
+                    custom = "Custom Sound Path",
                 },
                 get = function() return ns.db.alertSound end,
                 set = function(_, val) ns.db.alertSound = val end,
+            },
+            alertSoundTTSNote = {
+                type   = "description",
+                name   = "|cFFAAAAAATTS requires 'Enable Text-to-Speech' to be on in\nInterface → Accessibility → Accessibility.|r",
+                order  = 11.5,
+                hidden = function() return ns.db.alertSound ~= "tts" end,
+            },
+            alertSoundLSM = {
+                type          = "select",
+                name          = "Library Sound",
+                desc          = "Sound registered by any installed addon via LibSharedMedia (e.g. BigWigs, DBM, WeakAuras).",
+                order         = 12,
+                hidden        = function() return ns.db.alertSound ~= "lsm" end,
+                values        = function()
+                    local LSM = LibStub("LibSharedMedia-3.0", true)
+                    return LSM and LSM:HashTable("sound") or {}
+                end,
+                dialogControl = "LSM30_Sound",
+                get           = function() return ns.db.alertSoundLSM end,
+                set           = function(_, val) ns.db.alertSoundLSM = val end,
             },
             alertSoundCustom = {
                 type   = "input",
                 name   = "Custom Sound Path",
                 desc   = "Full path to a .ogg file, e.g. Interface\\AddOns\\MyAddon\\sound.ogg",
-                order  = 12,
+                order  = 13,
                 width  = "full",
                 hidden = function() return ns.db.alertSound ~= "custom" end,
                 get    = function() return ns.db.alertSoundCustom end,
@@ -101,7 +112,7 @@ local function BuildOptions()
             alertVolume = {
                 type  = "range",
                 name  = "Alert Volume",
-                order = 13,
+                order = 14,
                 min   = 0.0, max = 1.0, step = 0.05,
                 get   = function() return ns.db.alertVolume end,
                 set   = function(_, val) ns.db.alertVolume = val end,
@@ -110,7 +121,7 @@ local function BuildOptions()
                 type  = "execute",
                 name  = "Test Alert Sound",
                 desc  = "Play your selected alert sound right now.",
-                order = 14,
+                order = 15,
                 func  = function() ns.CastBar:PlayAlert() end,
             },
 
@@ -127,10 +138,26 @@ local function BuildOptions()
                 get   = function() return ns.db.castBarAllCasts end,
                 set   = function(_, val) ns.db.castBarAllCasts = val end,
             },
+            castBarTexture = {
+                type          = "select",
+                name          = "Bar Texture",
+                desc          = "Visual texture for the cast bar. Picks up textures from any installed addon that uses LibSharedMedia.",
+                order         = 22,
+                values        = function()
+                    local LSM = LibStub("LibSharedMedia-3.0", true)
+                    return LSM and LSM:HashTable("statusbar") or {}
+                end,
+                dialogControl = "LSM30_Statusbar",
+                get           = function() return ns.db.castBarTexture end,
+                set           = function(_, val)
+                    ns.db.castBarTexture = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
             castBarWidth = {
                 type  = "range",
                 name  = "Bar Width",
-                order = 22,
+                order = 23,
                 min   = 80, max = 500, step = 10,
                 get   = function() return ns.db.castBarWidth end,
                 set   = function(_, val)
@@ -141,7 +168,7 @@ local function BuildOptions()
             castBarHeight = {
                 type  = "range",
                 name  = "Bar Height",
-                order = 23,
+                order = 24,
                 min   = 10, max = 60, step = 2,
                 get   = function() return ns.db.castBarHeight end,
                 set   = function(_, val)
@@ -153,7 +180,7 @@ local function BuildOptions()
                 type     = "color",
                 name     = "Interruptible Cast Colour",
                 desc     = "Colour of the bar when the cast CAN be interrupted.",
-                order    = 24,
+                order    = 25,
                 hasAlpha = true,
                 get      = function()
                     local c = ns.db.castBarColor
@@ -169,7 +196,7 @@ local function BuildOptions()
                 type     = "color",
                 name     = "Non-Interruptible Cast Colour",
                 desc     = "Colour when the cast CANNOT be interrupted (only shown if All Casts is enabled).",
-                order    = 25,
+                order    = 26,
                 hasAlpha = true,
                 hidden   = function() return not ns.db.castBarAllCasts end,
                 get      = function()
@@ -182,11 +209,185 @@ local function BuildOptions()
                     ns.CastBar:ApplySettings()
                 end,
             },
+            showInterruptCD = {
+                type  = "toggle",
+                name  = "Show Interrupt Cooldown",
+                desc  = "Show a gold tick on the bar when your interrupt comes off cooldown mid-cast. Bar turns grey if your interrupt won't be ready before the cast ends.",
+                order = 27,
+                width = "full",
+                get   = function() return ns.db.showInterruptCD end,
+                set   = function(_, val) ns.db.showInterruptCD = val end,
+            },
+
+            -- ── Text Settings ─────────────────────────────────
+            textSettingsHeader = {
+                type = "header", name = "Text Settings", order = 30,
+            },
+
+            -- Alert Label
+            alertLabelSubHeader = {
+                type = "header", name = "Alert Label", order = 31,
+            },
+            alertTextMode = {
+                type   = "select",
+                name   = "Label Content",
+                desc   = "What text to display on the bar during an interruptible cast.",
+                order  = 32,
+                values = {
+                    spellname = "Spell Name (default)",
+                    custom    = "Custom Label",
+                },
+                get = function() return ns.db.alertTextMode end,
+                set = function(_, val)
+                    ns.db.alertTextMode = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            alertText = {
+                type   = "input",
+                name   = "Custom Label",
+                desc   = "Text shown on the bar when an interruptible cast begins.",
+                order  = 33,
+                width  = "full",
+                hidden = function() return ns.db.alertTextMode ~= "custom" end,
+                get    = function() return ns.db.alertText end,
+                set    = function(_, val)
+                    ns.db.alertText = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            alertTextFont = {
+                type          = "select",
+                name          = "Font",
+                order         = 34,
+                values        = function()
+                    local LSM = LibStub("LibSharedMedia-3.0", true)
+                    return LSM and LSM:HashTable("font") or {}
+                end,
+                dialogControl = "LSM30_Font",
+                get           = function() return ns.db.alertTextFont end,
+                set           = function(_, val)
+                    ns.db.alertTextFont = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            alertTextSize = {
+                type  = "range",
+                name  = "Font Size",
+                order = 35,
+                min   = 8, max = 48, step = 1,
+                get   = function() return ns.db.alertTextSize end,
+                set   = function(_, val)
+                    ns.db.alertTextSize = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            alertTextColor = {
+                type     = "color",
+                name     = "Text Colour",
+                order    = 36,
+                hasAlpha = true,
+                get      = function()
+                    local c = ns.db.alertTextColor
+                    return c.r, c.g, c.b, c.a
+                end,
+                set = function(_, r, g, b, a)
+                    local c = ns.db.alertTextColor
+                    c.r, c.g, c.b, c.a = r, g, b, a
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            alertTextAnchor = {
+                type   = "select",
+                name   = "Position",
+                desc   = "Where on the bar the alert label appears.",
+                order  = 37,
+                values = { LEFT = "Left", CENTER = "Center", RIGHT = "Right" },
+                get    = function() return ns.db.alertTextAnchor end,
+                set    = function(_, val)
+                    ns.db.alertTextAnchor = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+
+            -- Duration Text
+            durationTextSubHeader = {
+                type = "header", name = "Duration Text", order = 40,
+            },
+            castDurationShow = {
+                type  = "toggle",
+                name  = "Show Duration Countdown",
+                desc  = "Display a countdown timer on the bar showing seconds remaining.",
+                order = 41,
+                width = "full",
+                get   = function() return ns.db.castDurationShow end,
+                set   = function(_, val)
+                    ns.db.castDurationShow = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            castDurationFont = {
+                type          = "select",
+                name          = "Font",
+                order         = 42,
+                hidden        = function() return not ns.db.castDurationShow end,
+                values        = function()
+                    local LSM = LibStub("LibSharedMedia-3.0", true)
+                    return LSM and LSM:HashTable("font") or {}
+                end,
+                dialogControl = "LSM30_Font",
+                get           = function() return ns.db.castDurationFont end,
+                set           = function(_, val)
+                    ns.db.castDurationFont = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            castDurationSize = {
+                type   = "range",
+                name   = "Font Size",
+                order  = 43,
+                hidden = function() return not ns.db.castDurationShow end,
+                min    = 8, max = 48, step = 1,
+                get    = function() return ns.db.castDurationSize end,
+                set    = function(_, val)
+                    ns.db.castDurationSize = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            castDurationColor = {
+                type     = "color",
+                name     = "Text Colour",
+                order    = 44,
+                hidden   = function() return not ns.db.castDurationShow end,
+                hasAlpha = true,
+                get      = function()
+                    local c = ns.db.castDurationColor
+                    return c.r, c.g, c.b, c.a
+                end,
+                set = function(_, r, g, b, a)
+                    local c = ns.db.castDurationColor
+                    c.r, c.g, c.b, c.a = r, g, b, a
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+            castDurationAnchor = {
+                type   = "select",
+                name   = "Position",
+                order  = 45,
+                hidden = function() return not ns.db.castDurationShow end,
+                values = { LEFT = "Left", CENTER = "Center", RIGHT = "Right" },
+                get    = function() return ns.db.castDurationAnchor end,
+                set    = function(_, val)
+                    ns.db.castDurationAnchor = val
+                    ns.CastBar:ApplySettings()
+                end,
+            },
+
             testCastBtn = {
                 type  = "execute",
                 name  = "Test Cast Bar",
                 desc  = "Show a fake 3-second interruptible cast bar.",
-                order = 26,
+                order = 50,
                 func  = function()
                     ns.CastBar:ShowWithMockData({ spellName = "Frost Bolt", duration = 3.0, interruptible = true })
                 end,

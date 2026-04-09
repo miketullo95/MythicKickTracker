@@ -8,11 +8,11 @@ ns.Panel = Panel
 -- ============================================================
 --  Layout constants
 -- ============================================================
-local PANEL_WIDTH   = 320
+local PANEL_WIDTH   = 380
 local ROW_HEIGHT    = 28
-local HEADER_HEIGHT = 36
-local FOOTER_HEIGHT = 40
-local PAD           = 8
+local HEADER_HEIGHT = 56
+local FOOTER_HEIGHT = 0
+local PAD           = 10
 local MAX_ROWS      = 5
 
 -- ============================================================
@@ -37,6 +37,10 @@ local function MarkerIconString(index, size)
     size = size or 16
     if not index or index < 1 or index > 8 then return "" end
     return string.format("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:%d|t", index, size)
+end
+
+local function ShortName(name)
+    return name and name:match("^([^%-]+)") or name
 end
 
 local function HasMarkerConflict(playerName, markerIndex)
@@ -82,7 +86,7 @@ end
 -- ============================================================
 local function CreateMarkerDropdown(parent, isSelf)
     local dd = CreateFrame("Frame", nil, parent, "UIDropDownMenuTemplate")
-    UIDropDownMenu_SetWidth(dd, 130)
+    UIDropDownMenu_SetWidth(dd, 100)
 
     local function UpdateDD()
         local current = ns.db.myMarker
@@ -125,43 +129,52 @@ end
 local function BuildPanel()
     local totalHeight = HEADER_HEIGHT + (MAX_ROWS * ROW_HEIGHT) + FOOTER_HEIGHT + PAD * 2
 
-    local frame = CreateFrame("Frame", "TKTPanelFrame", UIParent, "BasicFrameTemplateWithInset")
+    local frame = CreateFrame("Frame", "MKTPanelFrame", UIParent, "BasicFrameTemplateWithInset")
     frame:SetSize(PANEL_WIDTH, totalHeight)
-    frame:SetPoint("CENTER", UIParent, "CENTER", 200, 100)
+    local pos = ns.db.panelPos
+    frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetClampedToScreen(true)
     frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-    frame.TitleText:SetText("|cFF00CCFFTulloKickTracker|r  —  Kick Assignments")
-
-    -- Test mode badge
-    local testBadge = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    testBadge:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -24, -4)
-    testBadge:SetText("|cFFFF4444[TEST MODE]|r")
-    testBadge:Hide()
-    frame.testBadge = testBadge
+    frame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local point, _, _, x, y = self:GetPoint()
+        ns.db.panelPos.point = point
+        ns.db.panelPos.x     = x
+        ns.db.panelPos.y     = y
+    end)
+    frame.TitleText:SetText("|cFF00CCFFMythic Kick Tracker|r  —  Kick Assignments")
+    frame._UpdateTitle = function()
+        if ns.db.testMode then
+            frame.TitleText:SetText("|cFF00CCFFMythic Kick Tracker|r  —  Kick Assignments  |cFFFF4444[TEST]|r")
+        else
+            frame.TitleText:SetText("|cFF00CCFFMythic Kick Tracker|r  —  Kick Assignments")
+        end
+    end
 
     -- Column headers
+    -- Column headers sit in the middle of the header zone, well clear of the inset border
+    local colHeaderY = -HEADER_HEIGHT + 18
     local colName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    colName:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD + 2, -HEADER_HEIGHT + 4)
-    colName:SetText("|cFFAAAAAA  Player|r")
+    colName:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD + 2, colHeaderY)
+    colName:SetText("|cFFCCCCCCPlayer|r")
 
     local colMarker = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    colMarker:SetPoint("TOPLEFT", frame, "TOPLEFT", 110, -HEADER_HEIGHT + 4)
-    colMarker:SetText("|cFFAAAAAA  Marker|r")
+    colMarker:SetPoint("TOPLEFT", frame, "TOPLEFT", 150, colHeaderY)
+    colMarker:SetText("|cFFCCCCCCMarker|r")
 
     local colMob = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    colMob:SetPoint("TOPLEFT", frame, "TOPLEFT", 250, -HEADER_HEIGHT + 4)
-    colMob:SetText("|cFFAAAAAA  Target|r")
+    colMob:SetPoint("TOPLEFT", frame, "TOPLEFT", 270, colHeaderY)
+    colMob:SetText("|cFFCCCCCCTarget|r")
 
-    -- Separator
+    -- Separator between headers and rows
     local sep = frame:CreateTexture(nil, "ARTWORK")
-    sep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  PAD, -HEADER_HEIGHT + 2)
-    sep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -HEADER_HEIGHT + 2)
+    sep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  PAD, -HEADER_HEIGHT + 4)
+    sep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -HEADER_HEIGHT + 4)
     sep:SetHeight(1)
-    sep:SetColorTexture(0.4, 0.4, 0.4, 0.8)
+    sep:SetColorTexture(0.5, 0.5, 0.5, 0.6)
 
     -- Row pool
     frame.rows = {}
@@ -183,15 +196,17 @@ local function BuildPanel()
         -- Player name
         local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         nameText:SetPoint("LEFT", row, "LEFT", 2, 0)
-        nameText:SetWidth(95)
+        nameText:SetWidth(135)
         nameText:SetJustifyH("LEFT")
+        nameText:SetWordWrap(false)
         row.nameText = nameText
 
         -- Mob name
         local mobText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        mobText:SetPoint("LEFT", row, "LEFT", 250 - PAD, 0)
-        mobText:SetWidth(60)
+        mobText:SetPoint("LEFT", row, "LEFT", 270 - PAD, 0)
+        mobText:SetWidth(100)
         mobText:SetJustifyH("LEFT")
+        mobText:SetWordWrap(false)
         row.mobText = mobText
 
         -- Conflict warning icon
@@ -204,16 +219,6 @@ local function BuildPanel()
         row:Hide()
         frame.rows[i] = row
     end
-
-    -- Footer: announce button
-    local announceBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    announceBtn:SetSize(180, 24)
-    announceBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, PAD + 4)
-    announceBtn:SetText("Announce My Marker")
-    announceBtn:SetScript("OnClick", function()
-        ns.PartySync:AnnounceMarker()
-    end)
-    frame.announceBtn = announceBtn
 
     frame:Hide()
     Panel.frame = frame
@@ -228,7 +233,7 @@ function Panel:Refresh()
     local me      = UnitName("player")
     local players = GetSortedPlayers()
 
-    self.frame.testBadge[ns.db.testMode and "Show" or "Hide"](self.frame.testBadge)
+    self.frame._UpdateTitle()
 
     for i = 1, MAX_ROWS do
         local row   = self.frame.rows[i]
@@ -242,20 +247,21 @@ function Panel:Refresh()
             local name   = entry.name
             local isSelf = entry.isSelf
 
-            -- Player name colour
+            -- Player name colour (strip realm suffix)
+            local displayName = ShortName(name)
             if isSelf then
-                row.nameText:SetText("|cFFFFD700" .. name .. "|r")
+                row.nameText:SetText("|cFFFFD700" .. displayName .. "|r")
             elseif data and data.hasAddon then
-                row.nameText:SetText("|cFFFFFFFF" .. name .. "|r")
+                row.nameText:SetText("|cFFFFFFFF" .. displayName .. "|r")
             else
-                row.nameText:SetText("|cFF888888" .. name .. " (no addon)|r")
+                row.nameText:SetText("|cFF666666" .. displayName .. "|r")
             end
 
             -- Marker: dropdown for self, icon+name for others
             if isSelf then
                 if not row.dd then
                     row.dd = CreateMarkerDropdown(row, true)
-                    row.dd:SetPoint("LEFT", row, "LEFT", 90, 0)
+                    row.dd:SetPoint("LEFT", row, "LEFT", 140, 0)
                 end
                 row.dd._Update()
                 row.dd:Show()
@@ -263,7 +269,7 @@ function Panel:Refresh()
                 if row.dd then row.dd:Hide() end
                 if data and data.hasAddon and data.marker and data.marker > 0 then
                     local icon = MarkerIconString(data.marker, 14)
-                    row.nameText:SetText("|cFFFFFFFF" .. name .. "|r  " .. icon)
+                    row.nameText:SetText("|cFFFFFFFF" .. displayName .. "|r  " .. icon)
                 end
             end
 

@@ -6,6 +6,44 @@ local FocusTracker = {}
 ns.FocusTracker = FocusTracker
 
 -- ============================================================
+--  Macro management
+-- ============================================================
+local MACRO_NAME = "MKT Focus"
+
+local function BuildMacroBody()
+    if ns.db.myMarker <= 0 then
+        -- No marker set yet — just focus, no mark or announce
+        return "#showtooltip\n/focus [@mouseover,harm,nodead][@target,harm,nodead]"
+    end
+    return string.format(
+        "#showtooltip\n/tm [@mouseover,exists][] %d\n/focus [@mouseover,harm,nodead][@target,harm,nodead]",
+        ns.db.myMarker
+    )
+end
+
+local function GetMacroIcon()
+    if ns.db.myMarker <= 0 then return "ability_kick" end
+    local path   = ns.MARKERS[ns.db.myMarker].icon
+    local fileID = GetFileIDFromPath and GetFileIDFromPath(path)
+    return (fileID and fileID > 0) and fileID or "ability_kick"
+end
+
+function FocusTracker:CreateOrUpdateMacro()
+    if InCombatLockdown() then return end
+    local icon = GetMacroIcon()
+    local body = BuildMacroBody()
+    local idx  = GetMacroIndexByName(MACRO_NAME)
+    if idx > 0 then
+        EditMacro(idx, MACRO_NAME, icon, body)
+    else
+        local ok = CreateMacro(MACRO_NAME, icon, body, false)
+        if not ok then
+            ns.Print("Could not create macro — you may be at the macro limit (120). Free a slot and run /kt macro.")
+        end
+    end
+end
+
+-- ============================================================
 --  Module init (called from Core.lua:OnEnable)
 -- ============================================================
 function FocusTracker:Initialize()
@@ -18,37 +56,37 @@ function FocusTracker:Initialize()
             FocusTracker:OnFocusChanged()
         end
     end)
+
+    self:CreateOrUpdateMacro()
 end
 
 -- ============================================================
 --  Focus changed handler
 -- ============================================================
 function FocusTracker:OnFocusChanged()
-    local me = UnitName("player")
+    local me        = UnitName("player")
+    -- Snapshot all focus state immediately — the game can clear focus
+    -- between successive API calls, causing false "no focus" reads
+    local focusName = UnitName("focus")
+    local isPlayer  = focusName and UnitIsPlayer("focus")
 
-    -- Focus was cleared
-    if not UnitExists("focus") then
-        ns.partyData[me].mobName = nil
-        ns.Panel:Refresh()
-        ns.PartySync:BroadcastAssignment()
-        return
+    if ns.partyData[me] then
+        ns.partyData[me].mobName = (focusName and not isPlayer) and focusName or nil
     end
 
-    -- Don't assign players (e.g. accidentally focusing a teammate)
-    if UnitIsPlayer("focus") then
-        ns.partyData[me].mobName = nil
-        ns.Panel:Refresh()
-        ns.PartySync:BroadcastAssignment()
-        return
-    end
-
-    -- Valid mob focus — record name and apply marker
-    local mobName = UnitName("focus") or "Unknown"
-    ns.partyData[me].mobName = mobName
-
-    local markerIndex = ns.db.myMarker
-    if markerIndex and markerIndex > 0 then
-        SetRaidTarget("focus", markerIndex)
+    -- If the new focus target is already mid-cast, show the bar immediately.
+    -- UNIT_SPELLCAST_START only fires for casts that begin AFTER focus is set,
+    -- so without this check the bar never appears for in-progress casts.
+    if focusName and not isPlayer then
+        if UnitCastingInfo("focus") then
+            ns.CastBar:OnCastStart(false)
+        elseif UnitChannelInfo("focus") then
+            ns.CastBar:OnCastStart(true)
+        else
+            ns.CastBar:Hide()
+        end
+    else
+        ns.CastBar:Hide()
     end
 
     ns.Panel:Refresh()
@@ -71,11 +109,7 @@ function FocusTracker:OnMarkerChanged()
         end
     end
 
-    -- Auto-announce if in a valid dungeon/party and setting is on
-    if ns.db.autoAnnounce and ns.IsInValidDungeon() then
-        ns.PartySync:AnnounceMarker()
-    end
-
+    self:CreateOrUpdateMacro()
     ns.PartySync:BroadcastMarker()
     ns.Panel:Refresh()
 end

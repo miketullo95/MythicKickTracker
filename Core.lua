@@ -6,7 +6,7 @@ local addonName, ns = ...
 -- ============================================================
 --  Addon object (Ace3)
 -- ============================================================
-local TKT = LibStub("AceAddon-3.0"):NewAddon("TulloKickTracker",
+local TKT = LibStub("AceAddon-3.0"):NewAddon("MythicKickTracker",
     "AceConsole-3.0",
     "AceEvent-3.0",
     "AceComm-3.0",
@@ -31,7 +31,9 @@ ns.MARKERS = {
 -- Helper: marker index → inline texture string for chat
 function ns.MarkerChatIcon(index)
     if not index or index < 1 or index > 8 then return "" end
-    return "|T" .. ns.MARKERS[index].icon .. ":14|t"
+    -- Chat escape codes require forward slashes; backslashes are misread as escape sequences
+    local icon = ns.MARKERS[index].icon:gsub("\\", "/")
+    return "|T" .. icon .. ":14|t"
 end
 
 -- Helper: marker index → display name
@@ -47,7 +49,8 @@ local defaults = {
     profile = {
         myMarker          = 0,        -- 0 = unset; 1-8 = marker index
         dungeonScope      = "mythic", -- "mythic" | "all"
-        alertSound        = "tts",    -- "tts" | "bundled" | "wowui" | "custom"
+        alertSound        = "tts",    -- "tts" | "lsm" | "wowui" | "custom"
+        alertSoundLSM     = "",       -- LSM sound name
         alertSoundCustom  = "",       -- path for custom sound
         alertVolume       = 1.0,
         castBarAllCasts   = false,    -- show bar for non-interruptible too
@@ -55,9 +58,22 @@ local defaults = {
         castBarColorSafe  = { r=0.5,  g=0.5, b=0.5, a=1.0 }, -- non-interruptible
         castBarWidth      = 220,
         castBarHeight     = 22,
+        castBarTexture    = "Blizzard", -- LSM statusbar texture name
         castBarPos        = { point="CENTER", x=0, y=-120 },
+        alertTextMode     = "spellname", -- "spellname" | "custom"
+        alertText         = "KICK",
+        alertTextFont     = "Friz Quadrata TT", -- LSM font name
+        alertTextSize     = 16,
+        alertTextColor    = { r=1.0, g=0.13, b=0.13, a=1.0 },
+        alertTextAnchor   = "LEFT",   -- CENTER | LEFT | RIGHT | TOP | BOTTOM
+        castDurationShow   = true,
+        castDurationAnchor = "RIGHT",
+        castDurationFont   = "Friz Quadrata TT",
+        castDurationSize   = 13,
+        castDurationColor  = { r=1.0, g=1.0, b=1.0, a=1.0 },
+        showInterruptCD    = true,
         showPanelInCombat = false,
-        autoAnnounce      = true,
+        panelPos          = { point = "CENTER", x = 200, y = 100 },
         testMode          = false,
     },
 }
@@ -76,18 +92,18 @@ ns.partyData = {}
 --  Lifecycle
 -- ============================================================
 function TKT:OnInitialize()
-    self.db = LibStub("AceDB-3.0"):New("TulloKickTrackerDB", defaults, true)
+    self.db = LibStub("AceDB-3.0"):New("MythicKickTrackerDB", defaults, true)
     ns.db = self.db.profile  -- convenient shorthand used by all modules
 
     -- Register slash commands
     self:RegisterChatCommand("kt",          "SlashHandler")
-    self:RegisterChatCommand("kicktracker", "SlashHandler")
+    self:RegisterChatCommand("mythickicktracker", "SlashHandler")
 
     -- Register AceConfig options + Blizzard settings panel
     local AceConfig       = LibStub("AceConfig-3.0")
     local AceConfigDialog = LibStub("AceConfigDialog-3.0")
-    AceConfig:RegisterOptionsTable("TulloKickTracker", function() return ns.BuildOptions() end)
-    AceConfigDialog:AddToBlizOptions("TulloKickTracker", "TulloKickTracker")
+    AceConfig:RegisterOptionsTable("MythicKickTracker", function() return ns.BuildOptions() end)
+    AceConfigDialog:AddToBlizOptions("MythicKickTracker", "Mythic Kick Tracker")
 end
 
 function TKT:OnEnable()
@@ -105,7 +121,7 @@ function TKT:OnEnable()
     ns.PartySync:Initialize()
     ns.Panel:Initialize()
 
-    self:Print("|cFF00CCFFTulloKickTracker|r v1.0 loaded. Type |cFFFFFF00/kt help|r for commands.")
+    self:Print("|cFF00CCFFMythic Kick Tracker|r v1.0 loaded. Type |cFFFFFF00/kt help|r for commands.")
 end
 
 -- ============================================================
@@ -115,10 +131,10 @@ local slashCommands = {}
 
 slashCommands["help"] = function()
     local TKT = ns.TKT
-    TKT:Print("|cFF00CCFFTulloKickTracker|r commands:")
+    TKT:Print("|cFF00CCFFMythic Kick Tracker|r commands:")
     TKT:Print("  |cFFFFFF00/kt panel|r        — toggle the assignment panel")
     TKT:Print("  |cFFFFFF00/kt config|r       — open settings")
-    TKT:Print("  |cFFFFFF00/kt announce|r     — announce your marker to party chat")
+    TKT:Print("  |cFFFFFF00/kt macro|r        — create/update the MKT Focus macro")
     TKT:Print("  |cFFFFFF00/kt test|r         — toggle dev test mode")
     TKT:Print("  |cFFFFFF00/kt testsound|r    — play alert sound now")
     TKT:Print("  |cFFFFFF00/kt testcast|r     — show a fake interruptible cast bar")
@@ -131,11 +147,7 @@ slashCommands["panel"] = function()
 end
 
 slashCommands["config"] = function()
-    LibStub("AceConfigDialog-3.0"):Open("TulloKickTracker")
-end
-
-slashCommands["announce"] = function()
-    ns.PartySync:AnnounceMarker()
+    LibStub("AceConfigDialog-3.0"):Open("MythicKickTracker")
 end
 
 slashCommands["test"] = function()
@@ -149,6 +161,11 @@ slashCommands["test"] = function()
         ns.PartySync:ClearMockParty()
         ns.Panel:Refresh()
     end
+end
+
+slashCommands["macro"] = function()
+    ns.FocusTracker:CreateOrUpdateMacro()
+    ns.TKT:Print("Macro |cFFFFFF00" .. "MKT Focus" .. "|r created/updated. Drag it from the macro book to your bar.")
 end
 
 slashCommands["testsound"] = function()
@@ -186,7 +203,9 @@ end
 
 function TKT:SlashHandler(input)
     local cmd = (input:match("^%s*(%S+)") or ""):lower()
-    if slashCommands[cmd] then
+    if cmd == "" then
+        slashCommands["config"]()
+    elseif slashCommands[cmd] then
         slashCommands[cmd]()
     else
         slashCommands["help"]()
