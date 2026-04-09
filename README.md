@@ -1,4 +1,4 @@
-# TulloKickTracker
+# MythicKickTracker
 
 A Mythic+ interrupt assignment addon for World of Warcraft (Retail).
 
