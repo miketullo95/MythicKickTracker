@@ -1,0 +1,39 @@
+# TulloKickTracker — Automated Release
+#
+# Triggered when you push a version tag (e.g. "v1.0.0").
+# Builds the addon zip (with Ace3 libs embedded), then publishes
+# to CurseForge and Wago.io simultaneously.
+#
+# SETUP — add these secrets in your GitHub repo settings:
+#   Settings → Secrets and variables → Actions → New repository secret
+#
+#   CF_API_KEY   — your CurseForge API token
+#                  (curseforge.com → Account → API Tokens)
+#   WAGO_API_TOKEN — your Wago.io API token
+#                  (wago.io → Account → API)
+#   CF_PROJECT_ID  — numeric project ID from your CurseForge addon page URL
+#   WAGO_PROJECT_ID — alphanumeric project ID from your Wago addon page URL
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'   # triggers on tags like v1.0.0, v1.2.3-beta, etc.
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for changelog generation from git log
+
+      - name: Build & Publish
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY:      ${{ secrets.CF_API_KEY }}
+          WAGO_API_TOKEN:  ${{ secrets.WAGO_API_TOKEN }}
+          CF_PROJECT_ID:   ${{ secrets.CF_PROJECT_ID }}
+          WAGO_PROJECT_ID: ${{ secrets.WAGO_PROJECT_ID }}

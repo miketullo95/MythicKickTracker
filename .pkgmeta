@@ -1,0 +1,70 @@
+# .pkgmeta
+# Tells the BigWigs/nebularg packager which libraries to fetch and embed,
+# and which files to strip from the release zip.
+#
+# Docs: https://authors.curseforge.com/knowledge-base/projects/packaging/
+
+package-as: TulloKickTracker
+
+externals:
+  Libs/LibStub:
+    url: https://repos.wowace.com/wow/libs/libstub/trunk
+    tag: latest
+
+  Libs/CallbackHandler-1.0:
+    url: https://repos.wowace.com/wow/libs/callbackhandler/trunk
+    tag: latest
+
+  Libs/AceAddon-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceAddon-3.0
+    tag: latest
+
+  Libs/AceEvent-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceEvent-3.0
+    tag: latest
+
+  Libs/AceDB-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceDB-3.0
+    tag: latest
+
+  Libs/AceComm-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceComm-3.0
+    tag: latest
+
+  Libs/AceSerializer-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceSerializer-3.0
+    tag: latest
+
+  Libs/AceConsole-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceConsole-3.0
+    tag: latest
+
+  Libs/AceConfig-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceConfig-3.0
+    tag: latest
+
+  Libs/AceConfigDialog-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceConfigDialog-3.0
+    tag: latest
+
+  Libs/AceGUI-3.0:
+    url: https://repos.wowace.com/wow/libs/ace3/trunk
+    subdirectory: AceGUI-3.0
+    tag: latest
+
+# Files/folders to exclude from the release zip
+ignore:
+  - .github
+  - .gitignore
+  - .pkgmeta
+  - README.md
+  - .release
+  - "*.zip"
